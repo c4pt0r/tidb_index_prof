@@ -88,13 +88,13 @@ func (i Index) String() string {
 }
 
 type Sample struct {
-	DigestText string   `json:"digest_text"`
-	Digest     string   `json:"digest"`
-	TableNames []string `json:"table_names"`
-	UsedIndex  []Index  `json:"used_indexes"`
-	Count      int
-	FirstSeen  time.Time `json:"firstSeen"`
-	LastSeen   time.Time `json:"lastSeen"`
+	DigestText string    `json:"digest_text"`
+	Digest     string    `json:"digest"`
+	TableNames []string  `json:"table_names"`
+	UsedIndex  []Index   `json:"used_indexes"`
+	Count      int       `json:"count"`
+	FirstSeen  time.Time `json:"first_seen"`
+	LastSeen   time.Time `json:"last_seen"`
 }
 
 // SampleSource defines how to collect samples.
@@ -160,14 +160,14 @@ func getInvolvedTablesFromSamples(samples []Sample) []string {
 func fillStatForTable(tblName string) {
 	if _, ok := stat[tblName]; !ok {
 		stat[tblName] = make(IndexCounter)
-	}
-	indexes, err := getAllIndexesForTable(*dbName, tblName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, index := range indexes {
-		if _, ok := stat[tblName][index.String()]; !ok {
-			stat[tblName][index.String()] = 0
+		indexes, err := getAllIndexesForTable(*dbName, tblName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, index := range indexes {
+			if _, ok := stat[tblName][index.String()]; !ok {
+				stat[tblName][index.String()] = 0
+			}
 		}
 	}
 }
@@ -190,17 +190,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// get all tables
-	tableNames := getInvolvedTablesFromSamples(samples)
-
-	// build stat map
-	for _, tblName := range tableNames {
-		fillStatForTable(tblName)
-	}
-
+	// mainloop
 	// count used indexes
 	var samplesFullTableScan []Sample
 	for _, sample := range samples {
+		for _, tblName := range sample.TableNames {
+			// tableName format: `dbName`.`tblName`, but we only need `tblName`
+			parts := strings.Split(tblName, ".")
+			fillStatForTable(parts[1])
+		}
 		if sample.UsedIndex != nil {
 			for _, index := range sample.UsedIndex {
 				stat[index.TblName][index.String()] += sample.Count
