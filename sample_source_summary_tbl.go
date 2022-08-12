@@ -69,7 +69,8 @@ func (s *SampleSourceSummaryTbl) GetSamples(ctx context.Context) ([]Sample, erro
 				sample.UsedIndex = append(sample.UsedIndex, index)
 			}
 		}
-		// FIXME: check primary key usage
+		// FIXME: check primary key usage, implementation is ugly,
+		// need to be improved after this issue: https://github.com/pingcap/tidb/issues/37066
 		if plan.Valid {
 			planStr := plan.String
 			rdr := bufio.NewReader(strings.NewReader(planStr))
