@@ -1,5 +1,3 @@
-package main
-
 /*
 tidb_index_prof
 usage: ./tidb_index_prof -u <dbname> -p <dbpass> -H host -P <port> -l <log level>
@@ -42,14 +40,13 @@ $./tidb_index_prof -u test -p test -H localhost -P 3306 -l debug
 ]
 
 */
+package main
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/c4pt0r/log"
@@ -64,18 +61,8 @@ var (
 	dbName   = flag.String("db", "test", "TiDB database name")
 	logLevel = flag.String("l", "info", "log level")
 
-	db *sql.DB
-)
-
-var (
-	sqlGetAllIndexesForTable = `
-		SELECT
-			TABLE_NAME, KEY_NAME
-		FROM
-			INFORMATION_SCHEMA.TIDB_INDEXES
-		WHERE
-			TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
-			`
+	db   *sql.DB
+	stat *Stat
 )
 
 type Index struct {
@@ -112,64 +99,8 @@ func NewSampleSource(sourceName string) SampleSource {
 	panic("not implemented")
 }
 
-// IndexCounter is a counter for index usage.
-type IndexCounter map[string]int
-type TablesIndexCounter map[string]IndexCounter
-
-var stat TablesIndexCounter = make(TablesIndexCounter)
-
 func DB() *sql.DB {
 	return db
-}
-
-func getAllIndexesForTable(dbName, tblName string) ([]Index, error) {
-	var indexes []Index
-	stmt := fmt.Sprintf(sqlGetAllIndexesForTable, dbName, tblName)
-	log.D("get index for table:", stmt)
-	rows, err := db.Query(stmt)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var idx Index
-		if err := rows.Scan(&idx.TblName, &idx.IdxName); err != nil {
-			return nil, err
-		}
-		indexes = append(indexes, idx)
-	}
-	log.D("get index for table, result", indexes)
-	return indexes, nil
-}
-
-func getInvolvedTablesFromSamples(samples []Sample) []string {
-	var tableNames []string
-	tableNamesMap := make(map[string]struct{})
-	for _, sample := range samples {
-		for _, tblName := range sample.TableNames {
-			// tableName format: `dbName`.`tblName`, but we only need `tblName`
-			tableNamesMap[strings.Split(tblName, ".")[1]] = struct{}{}
-		}
-	}
-	for tblName := range tableNamesMap {
-		tableNames = append(tableNames, tblName)
-	}
-	return tableNames
-}
-
-func fillStatForTable(tblName string) {
-	if _, ok := stat[tblName]; !ok {
-		stat[tblName] = make(IndexCounter)
-		indexes, err := getAllIndexesForTable(*dbName, tblName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, index := range indexes {
-			if _, ok := stat[tblName][index.String()]; !ok {
-				stat[tblName][index.String()] = 0
-			}
-		}
-	}
 }
 
 func main() {
@@ -183,38 +114,25 @@ func main() {
 	}
 	defer db.Close()
 
-	source := NewSampleSource("summary_table")
+	stat = NewStat(*dbName)
 
+	source := NewSampleSource("summary_table")
 	samples, err := source.GetSamples(context.WithValue(context.TODO(), "dbName", *dbName))
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	// mainloop
 	// count used indexes
-	var samplesFullTableScan []Sample
 	for _, sample := range samples {
-		for _, tblName := range sample.TableNames {
-			// tableName format: `dbName`.`tblName`, but we only need `tblName`
-			parts := strings.Split(tblName, ".")
-			fillStatForTable(parts[1])
-		}
-		if sample.UsedIndex != nil {
-			for _, index := range sample.UsedIndex {
-				stat[index.TblName][index.String()] += sample.Count
-			}
-		} else {
-			samplesFullTableScan = append(samplesFullTableScan, sample)
-		}
+		stat.Put(sample)
 	}
-
+	// output
+	stat, fullScan := stat.ToJSON()
 	// output result
 	fmt.Println("--- Index usage stat:")
-	b, _ := json.MarshalIndent(stat, "", "  ")
-	fmt.Println(string(b))
+	fmt.Println(stat)
 
 	// output full table scan result
 	fmt.Println("--- Full table scan samples:")
-	b, _ = json.MarshalIndent(samplesFullTableScan, "", "  ")
-	fmt.Println(string(b))
+	fmt.Println(fullScan)
 }
