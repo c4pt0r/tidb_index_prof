@@ -27,6 +27,7 @@ $./tidb_index_prof -u root -H 127.0.0.1 -P 4000 -l debug
 {
   "t": {
     "t:a": 3,
+    "t:b": 0,
     "t:c": 1
   }
 }
@@ -37,8 +38,8 @@ $./tidb_index_prof -u root -H 127.0.0.1 -P 4000 -l debug
     "digest": "e5796985ccafe2f71126ed6c0ac939ffa015a8c0744a24b7aee6d587103fd2f7",
     "used_indexes": null,
     "Count": 1,
-    "firstSeen": "2022-08-11T17:18:15Z",
-    "lastSeen": "2022-08-11T17:18:15Z"
+    "firstSeen": "2022-08-11T17:39:09Z",
+    "lastSeen": "2022-08-11T17:39:09Z"
   }
 ]
 

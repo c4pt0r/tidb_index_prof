@@ -23,8 +23,8 @@ $./tidb_index_prof -u test -p test -H localhost -P 3306 -l debug
 --- Index usage stat:
 {
   "t": {
-    "t:a": 5,
-    "t:b": 1,
+    "t:a": 3,
+    "t:b": 0,
     "t:c": 1
   }
 }
@@ -35,8 +35,8 @@ $./tidb_index_prof -u test -p test -H localhost -P 3306 -l debug
     "digest": "e5796985ccafe2f71126ed6c0ac939ffa015a8c0744a24b7aee6d587103fd2f7",
     "used_indexes": null,
     "Count": 1,
-    "firstSeen": "2022-08-11T17:18:15Z",
-    "lastSeen": "2022-08-11T17:18:15Z"
+    "firstSeen": "2022-08-11T17:39:09Z",
+    "lastSeen": "2022-08-11T17:39:09Z"
   }
 ]
 
