@@ -1,0 +1,4 @@
+github.com/c4pt0r/log v0.0.0-20211004143616-aa6380016a47 h1:I7bb8MbleLvoW6scHXngCQaroNa9slYTaYOaQEsv2TQ=
+github.com/c4pt0r/log v0.0.0-20211004143616-aa6380016a47/go.mod h1:N78ACK7UQq5KjTLWQPw2A7UuzX712vN9akunb8ydlck=
+github.com/go-sql-driver/mysql v1.6.0 h1:BCTh4TKNUYmOmMUcQ3IipzF5prigylS7XXjEkfCHuOE=
+github.com/go-sql-driver/mysql v1.6.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
