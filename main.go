@@ -17,30 +17,31 @@ select * from t where a='a';
 select * from t where a='aa';
 select * from t where a='aaa' or c = 4;
 
-$./tidb_index_prof -u root -H 127.0.0.1 -P 4000 -db test
---- Index usage stat:
+$ ./tidb_index_prof | jq .
 {
-  "t": {
-    "t:PRIMARY": 3,
-    "t:b": 0,
-    "t:c": 1,
-    "t:primary": 1
+  "full_table_scan_samples": [
+    {
+      "digest_text": "select * from `t`",
+      "digest": "e5796985ccafe2f71126ed6c0ac939ffa015a8c0744a24b7aee6d587103fd2f7",
+      "table_names": [
+        "test.t"
+      ],
+      "used_indexes": null,
+      "count": 1,
+      "first_seen": "2022-08-12T15:49:53Z",
+      "last_seen": "2022-08-12T15:49:53Z"
+    }
+  ],
+  "stat": {
+    "t": {
+      "t:PRIMARY": 3,
+      "t:b": 0,
+      "t:c": 1,
+      "t:primary": 1
+    }
   }
 }
---- Full table scan samples:
-[
-  {
-    "digest_text": "select * from `t`",
-    "digest": "e5796985ccafe2f71126ed6c0ac939ffa015a8c0744a24b7aee6d587103fd2f7",
-    "table_names": [
-      "test.t"
-    ],
-    "used_indexes": null,
-    "count": 1,
-    "first_seen": "2022-08-11T23:59:23Z",
-    "last_seen": "2022-08-11T23:59:23Z"
-  }
-]
+
 */
 package main
 
