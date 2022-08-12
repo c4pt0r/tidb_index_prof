@@ -98,10 +98,12 @@ func (s *Stat) Put(sample Sample) {
 	}
 }
 
-func (s *Stat) ToJSON() (stats string, fullScanSamples string) {
+func (s *Stat) ToJSON() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	stat, _ := json.MarshalIndent(s.m, "", "  ")
-	fullScan, _ := json.MarshalIndent(s.fullScan, "", "  ")
-	return string(stat), string(fullScan)
+	var ret map[string]interface{} = make(map[string]interface{})
+	ret["stat"] = s.m
+	ret["full_table_scan_samples"] = s.fullScan
+	out, _ := json.MarshalIndent(ret, "", "  ")
+	return string(out)
 }

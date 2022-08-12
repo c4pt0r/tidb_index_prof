@@ -1,4 +1,4 @@
-create table t(a varchar(255), b varchar(255), c int, key a(a), key b(b), key c(c));
+create table t(a varchar(255) primary key, b varchar(255), c int, key b(b), key c(c));
 insert into t values('a', 'b', 1);
 insert into t values('aa', 'bb', 2);
 insert into t values('aaa', 'bbbb', 3);

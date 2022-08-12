@@ -127,12 +127,6 @@ func main() {
 		stat.Put(sample)
 	}
 	// output
-	stat, fullScan := stat.ToJSON()
-	// output result
-	fmt.Println("--- Index usage stat:")
-	fmt.Println(stat)
-
-	// output full table scan result
-	fmt.Println("--- Full table scan samples:")
-	fmt.Println(fullScan)
+	out := stat.ToJSON()
+	fmt.Println(out)
 }
