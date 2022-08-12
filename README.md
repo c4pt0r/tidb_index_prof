@@ -21,13 +21,12 @@ select * from t where a='a';
 select * from t where a='aa';
 select * from t where a='aaa' or c = 4;
 
-$./tidb_index_prof -u test -p test -H localhost -P 3306 -l debug
+$./tidb_index_prof -u root -H 127.0.0.1 -P 4000 -l debug
 
 --- Index usage stat:
 {
   "t": {
-    "t:a": 5,
-    "t:b": 1,
+    "t:a": 3,
     "t:c": 1
   }
 }
