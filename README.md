@@ -5,6 +5,7 @@
 `./tidb_index_prof -u <dbname> -p <dbpass> -H host -P <port> -l <log level>`
 
 output: sql query summary in last 30minutes, how many times each index is used (will also output non used indexes)
+for more detail: https://docs.pingcap.com/tidb/dev/statement-summary-tables
 
 
 ## Example
