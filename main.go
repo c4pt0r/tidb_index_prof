@@ -44,6 +44,7 @@ $./tidb_index_prof -u test -p test -H localhost -P 3306 -l debug
 */
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"flag"
@@ -67,12 +68,6 @@ var (
 )
 
 var (
-	sqlGetStmtSummary = `
-		SELECT 
-			digest_text, digest, exec_count, first_seen, last_seen, index_names 
-		FROM 
-			INFORMATION_SCHEMA.CLUSTER_STATEMENTS_SUMMARY WHERE STMT_TYPE = 'Select' AND TABLE_NAMES LIKE '%%%s%%'`
-
 	sqlGetAllIndexesForTable = `
 		SELECT
 			TABLE_NAME, KEY_NAME
@@ -93,14 +88,31 @@ func (i Index) String() string {
 }
 
 type Sample struct {
-	DigestText string  `json:"digest_text"`
-	Digest     string  `json:"digest"`
-	UsedIndex  []Index `json:"used_indexes"`
+	DigestText string   `json:"digest_text"`
+	Digest     string   `json:"digest"`
+	TableNames []string `json:"table_names"`
+	UsedIndex  []Index  `json:"used_indexes"`
 	Count      int
 	FirstSeen  time.Time `json:"firstSeen"`
 	LastSeen   time.Time `json:"lastSeen"`
 }
 
+// SampleSource defines how to collect samples.
+type SampleSource interface {
+	GetSamples(ctx context.Context) ([]Sample, error)
+}
+
+func NewSampleSource(sourceName string) SampleSource {
+	switch sourceName {
+	case "summary_table":
+		return NewSummaryTableSampleSource()
+	case "raw_sql_stream":
+		panic("not implemented")
+	}
+	panic("not implemented")
+}
+
+// IndexCounter is a counter for index usage.
 type IndexCounter map[string]int
 type TablesIndexCounter map[string]IndexCounter
 
@@ -113,7 +125,7 @@ func DB() *sql.DB {
 func getAllIndexesForTable(dbName, tblName string) ([]Index, error) {
 	var indexes []Index
 	stmt := fmt.Sprintf(sqlGetAllIndexesForTable, dbName, tblName)
-	log.D(stmt)
+	log.D("get index for table:", stmt)
 	rows, err := db.Query(stmt)
 	if err != nil {
 		return nil, err
@@ -126,56 +138,38 @@ func getAllIndexesForTable(dbName, tblName string) ([]Index, error) {
 		}
 		indexes = append(indexes, idx)
 	}
+	log.D("get index for table, result", indexes)
 	return indexes, nil
 }
 
-func collectSample(dbName string) ( /* samplesWithIndex */ []Sample /* samplesFullTableScan */, []Sample, error) {
-	var (
-		err  error
-		rows *sql.Rows
-	)
-	stmt := fmt.Sprintf(sqlGetStmtSummary, dbName)
-	log.D(stmt)
-	rows, err = db.Query(stmt)
+func getInvolvedTablesFromSamples(samples []Sample) []string {
+	var tableNames []string
+	tableNamesMap := make(map[string]struct{})
+	for _, sample := range samples {
+		for _, tblName := range sample.TableNames {
+			// tableName format: `dbName`.`tblName`, but we only need `tblName`
+			tableNamesMap[strings.Split(tblName, ".")[1]] = struct{}{}
+		}
+	}
+	for tblName := range tableNamesMap {
+		tableNames = append(tableNames, tblName)
+	}
+	return tableNames
+}
+
+func fillStatForTable(tblName string) {
+	if _, ok := stat[tblName]; !ok {
+		stat[tblName] = make(IndexCounter)
+	}
+	indexes, err := getAllIndexesForTable(*dbName, tblName)
 	if err != nil {
-		log.Fatalf("Failed to query TiDB: %s", err)
+		log.Fatal(err)
 	}
-	defer rows.Close()
-	var samplesWithIndex []Sample
-	var samplesFullTableScan []Sample
-
-	for rows.Next() {
-		var sample Sample
-		var usedIndexes sql.NullString
-		err = rows.Scan(&sample.DigestText, &sample.Digest, &sample.Count, &sample.FirstSeen, &sample.LastSeen, &usedIndexes)
-		if err != nil {
-			return nil, nil, err
-		}
-		if usedIndexes.Valid {
-			// parse index names from string
-			items := strings.Split(usedIndexes.String, ",")
-			for _, item := range items {
-				if item == "" {
-					continue
-				}
-				parts := strings.Split(item, ":")
-				index := Index{
-					TblName: strings.ToLower(parts[0]),
-					IdxName: strings.ToLower(parts[1]),
-				}
-				sample.UsedIndex = append(sample.UsedIndex, index)
-			}
-			samplesWithIndex = append(samplesWithIndex, sample)
-		} else {
-			// full table scans
-			samplesFullTableScan = append(samplesFullTableScan, sample)
+	for _, index := range indexes {
+		if _, ok := stat[tblName][index.String()]; !ok {
+			stat[tblName][index.String()] = 0
 		}
 	}
-	if err = rows.Err(); err != nil {
-		return nil, nil, err
-	}
-
-	return samplesWithIndex, samplesFullTableScan, nil
 }
 
 func main() {
@@ -187,36 +181,32 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to TiDB: %s", err)
 	}
+	defer db.Close()
 
-	samples, samplesFullTableScan, err := collectSample(*dbName)
+	source := NewSampleSource("summary_table")
+
+	samples, err := source.GetSamples(context.WithValue(context.TODO(), "dbName", *dbName))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// get all tables
-	var tableNames []string
-	for _, sample := range samples {
-		tableNames = append(tableNames, sample.UsedIndex[0].TblName)
-	}
+	tableNames := getInvolvedTablesFromSamples(samples)
 
 	// build stat map
 	for _, tblName := range tableNames {
-		if _, ok := stat[tblName]; !ok {
-			stat[tblName] = make(IndexCounter)
-		}
-		indexes, err := getAllIndexesForTable(*dbName, tblName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, index := range indexes {
-			stat[tblName][index.String()] = 0
-		}
+		fillStatForTable(tblName)
 	}
 
 	// count used indexes
+	var samplesFullTableScan []Sample
 	for _, sample := range samples {
-		for _, index := range sample.UsedIndex {
-			stat[index.TblName][index.String()] += sample.Count
+		if sample.UsedIndex != nil {
+			for _, index := range sample.UsedIndex {
+				stat[index.TblName][index.String()] += sample.Count
+			}
+		} else {
+			samplesFullTableScan = append(samplesFullTableScan, sample)
 		}
 	}
 
